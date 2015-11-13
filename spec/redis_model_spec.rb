@@ -10,36 +10,55 @@ describe RedisModel do
     expect(RedisModel::VERSION).not_to be nil
   end
 
-  it 'saves a record to Redis' do
-    person = Person.new(id: '123')
-    person.name = 'Alex'
-    person.save
+  describe '.create' do
+    it 'saves key/values and nested attributes' do
+      person = Person.create(id: '123', name: 'Alex', some_data: { a: 'ok' })
 
-    expect(redis.hget(person.key, 'name')).to eq("{\"v\":\"Alex\"}")
+      result = Person['123']
+
+      expect(result.id).to eq '123'
+      expect(result.name).to eq 'Alex'
+      expect(result.some_data).to eq({ 'a' => 'ok' })
+    end
   end
 
-  it 'loads a record from Redis' do
-    person = Person.new(id: '123')
-    person.name = 'Alex'
-    person.save
+  describe '#save' do
+    it 'saves a record to Redis' do
+      person = Person.new(id: '123')
+      person.name = 'Alex'
 
-    expect(Person['123'].name).to eq('Alex')
+      person.save
+
+      expect(redis.hget(person.key, 'name')).to eq("{\"v\":\"Alex\"}")
+    end
   end
 
-  it 'returns nil when person not found' do
-    expect(Person[id: 'notfound']).to eq(nil)
+  describe '#update_all' do
+    it 'only saves changed attributes' do
+      person = Person.create(id: '123', name: 'Alex')
+      redis.hset(person.key, 'name', "{\"v\":\"Bob\"}")
+
+      person.update_all(thingy: 'blah')
+
+      expect(person.name).to eq('Bob')
+      expect(Person['123'].name).to eq('Bob')
+    end
   end
 
-  it 'only saves changes' do
-    person = Person.new(id: '123')
-    person.name = 'Alex'
-    person.save
+  describe '.find' do
+    it 'returns record' do
+      person = Person.create(id: '123', name: 'Alex')
 
-    redis.hset(person.key, 'name', "{\"v\":\"Bob\"}")
+      result = Person['123']
 
-    person.update_all(thingy: 'blah')
+      expect(result.id).to eq('123')
+      expect(result.name).to eq('Alex')
+    end
 
-    expect(person.name).to eq('Bob')
-    expect(Person['123'].name).to eq('Bob')
+    it 'returns nil when record not found' do
+      result = Person['unknwon_id']
+
+      expect(result).to eq nil
+    end
   end
 end
