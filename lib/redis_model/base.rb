@@ -1,4 +1,10 @@
 module RedisModel
+  class SerializeError < RuntimeError
+  end
+
+  class DeserializeError < RuntimeError
+  end
+
   class Base
     def self.namespace=(value)
       @namespace = value
@@ -27,17 +33,35 @@ module RedisModel
 
     def self.[](id)
       data = client.hgetall(key(id))
-      data.empty? ? nil : self.new(deserialize(data))
+      data.empty? ? nil : new(deserialize(data))
+    end
+
+    def self.serialize_attr(key, value)
+      JSON.dump(value)
+    rescue StandardError
+      raise SerializeError, "Failed to serialize: #{key}"
+    end
+
+    def self.deserialize_attr(key, value)
+      JSON.parse(value, quirks_mode: true)
+    rescue StandardError
+      raise DeserializeError, "Failed to deserialize: #{key}"
     end
 
     def self.deserialize(data)
-      data.inject({}) do |hash, (key, value)|
-        hash.merge(key => JSON.parse(value)['v'])
+      data.each_with_object({}) do |(key, value), hash|
+        hash[key.to_s] = deserialize_attr(key, value)
+      end
+    end
+
+    def self.serialize_hash(hash)
+      hash.each_with_object({}) do |(key, value), new_hash|
+        new_hash[key.to_s] = serialize_attr(key, value)
       end
     end
 
     def self.create(values)
-      self.new(values).save
+      new(values).save
     end
 
     attr_reader :values
@@ -49,12 +73,14 @@ module RedisModel
     end
 
     def set(new_values)
-      values.merge!(stringify_hash(new_values))
+      new_values.each do |key, value|
+        values[key.to_s] = value
+      end
     end
 
     def update_all(values)
       values.each do |key, value|
-        client.hset(self.key, key, serialize(value))
+        client.hset(self.key, key, self.class.serialize_attr(key, value))
       end
 
       reload
@@ -65,9 +91,15 @@ module RedisModel
     def save(options = {})
       set_values = values.merge(id: id)
 
-      client.mapped_hmset(
-        key, serialize_hash(set_values)
-      )
+      client.mapped_hmset(key, self.class.serialize_hash(set_values))
+
+      self
+    end
+
+    def reload
+      new_values = client.hgetall(key)
+
+      values.replace(self.class.deserialize(new_values))
 
       self
     end
@@ -82,60 +114,30 @@ module RedisModel
 
     alias_method :respond_to_without_values?, :respond_to?
 
-    def respond_to?(method, include_priv = false)
+    def respond_to?(method, *arguments)
       method_name = method.to_s
-      if values.nil?
-        super
-      elsif method_name =~ /(?:=|\?)$/ && values.include?($`)
-        true
-      else
-        super
-      end
+
+      values.key?(method_name.sub(/(?:=|\?)$/, '')) || super
     end
 
     def method_missing(method_symbol, *arguments) #:nodoc:
       method_name = method_symbol.to_s
 
-      if method_name =~ /(=|\?)$/
-        case $1
-        when "="
-          values[$`] = arguments.first
-        when "?"
-          values[$`]
+      return values[method_name] if values.key?(method_name)
+
+      if m = /(=|\?)$/.match(method_name)
+        case m.captures[0]
+        when '='
+          values[m.pre_match] = arguments.first
+        when '?'
+          values[m.pre_match]
         end
       else
-        if values.include?(method_name)
-          return values[method_name]
-        end
-
         super
       end
     end
 
-    protected
-
-    def reload
-      new_values = client.hgetall(key)
-      new_values = self.class.deserialize(new_values)
-
-      values.replace(new_values)
-    end
-
-    def stringify_hash(hash)
-      hash.inject({}) do |new_hash, (key, value)|
-        new_hash.merge(key.to_s => value)
-      end
-    end
-
-    def serialize(value)
-      JSON.dump(v: value)
-    end
-
-    def serialize_hash(hash)
-      hash.inject({}) do |new_hash, (key, value)|
-        new_hash.merge(key => serialize(value))
-      end
-    end
+    private
 
     def client
       self.class.client

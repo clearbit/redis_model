@@ -12,13 +12,30 @@ describe RedisModel do
 
   describe '.create' do
     it 'saves key/values and nested attributes' do
-      person = Person.create(id: '123', name: 'Alex', some_data: { a: 'ok' })
+      Person.create(id: '123', name: 'Alex', some_data: { a: 'ok' })
 
       result = Person['123']
 
       expect(result.id).to eq '123'
       expect(result.name).to eq 'Alex'
       expect(result.some_data).to eq({ 'a' => 'ok' })
+    end
+  end
+
+  describe '.find' do
+    it 'returns record' do
+      Person.create(id: '123', name: 'Alex')
+
+      result = Person['123']
+
+      expect(result.id).to eq('123')
+      expect(result.name).to eq('Alex')
+    end
+
+    it 'returns nil when record not found' do
+      result = Person['unknown_id']
+
+      expect(result).to eq nil
     end
   end
 
@@ -29,14 +46,14 @@ describe RedisModel do
 
       person.save
 
-      expect(redis.hget(person.key, 'name')).to eq("{\"v\":\"Alex\"}")
+      expect(redis.hget(person.key, 'name')).to eq("\"Alex\"")
     end
   end
 
   describe '#update_all' do
     it 'only saves changed attributes' do
       person = Person.create(id: '123', name: 'Alex')
-      redis.hset(person.key, 'name', "{\"v\":\"Bob\"}")
+      redis.hset(person.key, 'name', "\"Bob\"")
 
       person.update_all(thingy: 'blah')
 
@@ -45,20 +62,43 @@ describe RedisModel do
     end
   end
 
-  describe '.find' do
-    it 'returns record' do
-      person = Person.create(id: '123', name: 'Alex')
+  describe '#method_missing' do
+    it 'handles predicate methods for known values' do
+      person = Person.new(pet_owner: true)
 
-      result = Person['123']
-
-      expect(result.id).to eq('123')
-      expect(result.name).to eq('Alex')
+      expect(person.pet_owner?).to eq true
     end
 
-    it 'returns nil when record not found' do
-      result = Person['unknwon_id']
+    it 'handles assignment to known values' do
+      person = Person.new
 
-      expect(result).to eq nil
+      person.pet_owner = true
+
+      expect(person.pet_owner).to eq true
+    end
+
+    it 'calls super for unknown values' do
+      person = Person.new
+
+      expect(-> { person.pet_owner }).to raise_exception(NoMethodError)
+    end
+  end
+
+  describe '#respond_to?' do
+    it 'returns true for known values' do
+      person = Person.new(pet_owner: true)
+
+      expect(person.respond_to?(:pet_owner)).to eq true
+      expect(person.respond_to?(:pet_owner?)).to eq true
+      expect(person.respond_to?(:pet_owner=)).to eq true
+    end
+
+    it 'returns false for unknown values' do
+      person = Person.new
+
+      expect(person.respond_to?(:pet_owner)).to eq false
+      expect(person.respond_to?(:pet_owner?)).to eq false
+      expect(person.respond_to?(:pet_owner=)).to eq false
     end
   end
 end
