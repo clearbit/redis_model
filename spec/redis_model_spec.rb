@@ -1,9 +1,7 @@
 require 'spec_helper'
 
 describe RedisModel do
-  class Person < RedisModel::Base
-  end
-
+  let(:test_class) { Class.new(RedisModel::Base) }
   let(:redis) { Redis.current }
 
   it 'has a version number' do
@@ -12,9 +10,9 @@ describe RedisModel do
 
   describe '.create' do
     it 'saves key/values and nested attributes' do
-      Person.create(id: '123', name: 'Alex', some_data: { a: 'ok' })
+      test_class.create(id: '123', name: 'Alex', some_data: { a: 'ok' })
 
-      result = Person['123']
+      result = test_class['123']
 
       expect(result.id).to eq '123'
       expect(result.name).to eq 'Alex'
@@ -24,24 +22,30 @@ describe RedisModel do
 
   describe '.find' do
     it 'returns record' do
-      Person.create(id: '123', name: 'Alex')
+      test_class.create(id: '123', name: 'Alex')
 
-      result = Person['123']
+      result = test_class['123']
 
       expect(result.id).to eq('123')
       expect(result.name).to eq('Alex')
     end
 
     it 'returns nil when record not found' do
-      result = Person['unknown_id']
+      result = test_class['unknown_id']
 
       expect(result).to eq nil
     end
   end
 
   describe '#save' do
+    it 'raises if the primary key is nil' do
+      person = test_class.new(name: 'Alex')
+
+      expect { person.save }.to raise_exception(RedisModel::PrimaryKeyError)
+    end
+
     it 'saves a record to Redis' do
-      person = Person.new(id: '123')
+      person = test_class.new(id: '123')
       person.name = 'Alex'
 
       person.save
@@ -52,25 +56,25 @@ describe RedisModel do
 
   describe '#update_all' do
     it 'only saves changed attributes' do
-      person = Person.create(id: '123', name: 'Alex')
+      person = test_class.create(id: '123', name: 'Alex')
       redis.hset(person.key, 'name', "\"Bob\"")
 
       person.update_all(thingy: 'blah')
 
       expect(person.name).to eq('Bob')
-      expect(Person['123'].name).to eq('Bob')
+      expect(test_class['123'].name).to eq('Bob')
     end
   end
 
   describe '#method_missing' do
     it 'handles predicate methods for known values' do
-      person = Person.new(pet_owner: true)
+      person = test_class.new(pet_owner: true)
 
       expect(person.pet_owner?).to eq true
     end
 
     it 'handles assignment to known values' do
-      person = Person.new
+      person = test_class.new
 
       person.pet_owner = true
 
@@ -78,7 +82,7 @@ describe RedisModel do
     end
 
     it 'calls super for unknown values' do
-      person = Person.new
+      person = test_class.new
 
       expect(-> { person.pet_owner }).to raise_exception(NoMethodError)
     end
@@ -86,7 +90,7 @@ describe RedisModel do
 
   describe '#respond_to?' do
     it 'returns true for known values' do
-      person = Person.new(pet_owner: true)
+      person = test_class.new(pet_owner: true)
 
       expect(person.respond_to?(:pet_owner)).to eq true
       expect(person.respond_to?(:pet_owner?)).to eq true
@@ -94,7 +98,7 @@ describe RedisModel do
     end
 
     it 'returns false for unknown values' do
-      person = Person.new
+      person = test_class.new
 
       expect(person.respond_to?(:pet_owner)).to eq false
       expect(person.respond_to?(:pet_owner?)).to eq false

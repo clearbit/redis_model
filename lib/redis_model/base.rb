@@ -5,6 +5,9 @@ module RedisModel
   class DeserializeError < RuntimeError
   end
 
+  class PrimaryKeyError < RuntimeError
+  end
+
   class Base
     def self.namespace=(value)
       @namespace = value
@@ -89,9 +92,7 @@ module RedisModel
     end
 
     def save(options = {})
-      set_values = values.merge(id: id)
-
-      client.mapped_hmset(key, self.class.serialize_hash(set_values))
+      client.mapped_hmset(key, self.class.serialize_hash(values))
 
       self
     end
@@ -104,11 +105,10 @@ module RedisModel
       self
     end
 
-    def id
-      values[self.class.primary_key] ||= generate_id
-    end
-
     def key(*params)
+      id = values[self.class.primary_key]
+      raise PrimaryKeyError, 'primary key is nil' if id.nil?
+
       self.class.key(id, *params)
     end
 
@@ -141,10 +141,6 @@ module RedisModel
 
     def client
       self.class.client
-    end
-
-    def generate_id
-      SecureRandom.hex(10)
     end
   end
 end
