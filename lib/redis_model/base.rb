@@ -130,7 +130,7 @@ module RedisModel
         when '='
           values[m.pre_match] = arguments.first
         when '?'
-          values[m.pre_match]
+          respond_to?(m.pre_match) ? send(m.pre_match) : nil
         end
       else
         super

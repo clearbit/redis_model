@@ -86,6 +86,20 @@ describe RedisModel do
 
       expect(-> { person.pet_owner }).to raise_exception(NoMethodError)
     end
+
+    it 'sends methods when using question mark' do
+      test_class = Class.new(RedisModel::Base) do
+        def unknown?
+          !(name? || id?)
+        end
+      end
+
+      person = test_class.new
+      expect(person.unknown?).to eq true
+
+      person.name = 'Harlow'
+      expect(person.unknown?).to eq false
+    end
   end
 
   describe '#respond_to?' do
