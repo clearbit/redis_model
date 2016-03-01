@@ -97,6 +97,10 @@ module RedisModel
       self
     end
 
+    def delete
+      client.del(key)
+    end
+
     def reload
       new_values = client.hgetall(key)
 

@@ -54,6 +54,16 @@ describe RedisModel do
     end
   end
 
+  describe '#delete' do
+    it 'removes the record from Redis' do
+      person = test_class.create(id: 123, name: 'Alex')
+
+      person.delete
+
+      expect(redis.get(person.key)).to eq nil
+    end
+  end
+
   describe '#update_all' do
     it 'only saves changed attributes' do
       person = test_class.create(id: '123', name: 'Alex')
