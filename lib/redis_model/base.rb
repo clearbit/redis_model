@@ -39,27 +39,27 @@ module RedisModel
       data.empty? ? nil : new(deserialize(data))
     end
 
-    def self.serialize_attr(key, value)
+    def self.serialize_attr(attr, value)
       JSON.dump(value)
     rescue StandardError
-      raise SerializeError, "Failed to serialize: #{key}"
+      raise SerializeError, "Failed to serialize: #{attr}"
     end
 
-    def self.deserialize_attr(key, value)
+    def self.deserialize_attr(attr, value)
       JSON.parse(value, quirks_mode: true)
     rescue StandardError
-      raise DeserializeError, "Failed to deserialize: #{key}"
+      raise DeserializeError, "Failed to deserialize: #{attr}"
     end
 
     def self.deserialize(data)
-      data.each_with_object({}) do |(key, value), hash|
-        hash[key.to_s] = deserialize_attr(key, value)
+      data.each_with_object({}) do |(attr, value), hash|
+        hash[attr.to_s] = deserialize_attr(attr, value)
       end
     end
 
     def self.serialize_hash(hash)
-      hash.each_with_object({}) do |(key, value), new_hash|
-        new_hash[key.to_s] = serialize_attr(key, value)
+      hash.each_with_object({}) do |(attr, value), new_hash|
+        new_hash[attr.to_s] = serialize_attr(attr, value)
       end
     end
 
@@ -76,15 +76,14 @@ module RedisModel
     end
 
     def set(new_values)
-      new_values.each do |key, value|
-        values[key.to_s] = value
+      new_values.each do |attr, value|
+        values[attr.to_s] = value
       end
     end
 
-    def update_all(values)
-      values.each do |key, value|
-        client.hset(self.key, key, self.class.serialize_attr(key, value))
-      end
+    def update_all(new_values)
+      new_values[self.class.primary_key] ||= values[self.class.primary_key]
+      client.mapped_hmset(key, self.class.serialize_hash(new_values))
 
       reload
 

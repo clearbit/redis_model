@@ -24,8 +24,8 @@ module RedisModel
     end
 
     module ClassMethods
-      def serializer(key)
-        serializer = @serializers[key.to_sym]
+      def serializer(attr)
+        serializer = @serializers[attr.to_sym]
         if serializer.is_a?(Symbol)
           @format_serializers[serializer]
         else
@@ -33,16 +33,16 @@ module RedisModel
         end
       end
 
-      def serialize_attr(key, value)
-        serializer(key)[0].call(value)
+      def serialize_attr(attr, value)
+        serializer(attr)[0].call(value)
       rescue StandardError
-        raise SerializeError, "Failed to serialize: #{key}"
+        raise SerializeError, "Failed to serialize: #{attr}"
       end
 
-      def deserialize_attr(key, value)
-        serializer(key)[1].call(value)
+      def deserialize_attr(attr, value)
+        serializer(attr)[1].call(value)
       rescue StandardError
-        raise DeserializeError, "Failed to deserialize: #{key}"
+        raise DeserializeError, "Failed to deserialize: #{attr}"
       end
 
       def serialize_attributes(serializers = nil, *attrs)

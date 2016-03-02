@@ -74,6 +74,16 @@ describe RedisModel do
       expect(person.name).to eq('Bob')
       expect(test_class['123'].name).to eq('Bob')
     end
+
+    it 'recreates a useable record if the current one had expired' do
+      person = test_class.create(id: '123', name: 'Alex')
+      redis.del person.key
+
+      person.update_all(name: 'Fred')
+
+      expect(person.id).to eq('123')
+      expect(test_class['123'].name).to eq('Fred')
+    end
   end
 
   describe '#method_missing' do
