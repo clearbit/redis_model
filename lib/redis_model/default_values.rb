@@ -19,6 +19,13 @@ module RedisModel
       set_default_values
     end
 
+    def reload
+      super
+      set_default_values
+
+      self
+    end
+
     private
 
     def set_default_values
