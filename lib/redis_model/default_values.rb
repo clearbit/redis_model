@@ -31,7 +31,7 @@ module RedisModel
     def set_default_values
       self.class.default_values.each do |attr, generator|
         attr_name = attr.to_s
-        @values[attr_name] = generator.call unless @values.key?(attr_name)
+        @values[attr_name] = generator.call if @values[attr_name].nil?
       end
     end
   end
