@@ -15,4 +15,10 @@ describe RedisModel::CustomSerializers do
 
     expect(person.mash_field).to eq Mash.new
   end
+
+  it 'uses a default value if the field exists but is set to nil' do
+    person = test_class.new(mash_field: nil)
+
+    expect(person.mash_field).to eq Mash.new
+  end
 end
